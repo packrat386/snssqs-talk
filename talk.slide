@@ -1,0 +1,71 @@
+Working With Events
+SNS, SQS, and You
+30 Nov 2016
+
+Aidan Coyle
+Services Team
+acoyle@enova.com
+
+* Async is the new normal
+
+Many of our new microservices are doing asynchronous processing
+
+- Payment Router
+- Paper Check Router
+- Padlock
+
+And we're adding more events to existing services all the time
+
+- Portfolio: Loan Status, Loan Application, Payments
+- PGS: Payment Data, C Codes
+- Postal: Opt Outs (coming soon)
+
+* HTTP is awkward for event processing
+
+Requires upstream producers to know about downstream consumers
+
+Both sides need to have retry logic for ephemeral failures
+
+Sending an event blocks for the upstream producer
+
+* SNS is for event producers
+
+Create a topic for a type of event
+
+- portfolio-loan-state-transitions-production
+- pgs-bank-account-corrections-production
+
+Emit minimal data needed to do something with the event
+
+  # https://git.enova.com/8b/pgs/blob/master/app/models/bank_account.rb
+  msg = {
+    new_pgs_bank_account_id: id,
+    old_pgs_bank_account_id: original_payment_instrument_id,
+    client:                  client,
+    identity_uri:            identity_uri
+  }
+  SubmitEventWorker.perform_async(topic, msg)
+
+* SQS is for event consumers
+
+Create one queue for an application and have it subscribe to any relevant topics
+
+Process messages based on which topic they come from
+
+Use a resilient background processing tool like Sidekiq with Scout
+
+* Scout
+
+Scout is a tool for processing SQS messages in Rails Apps
+
+It works by polling SQS and enqueueing the messages it gets in Sidekiq based on a config
+
+It uses a threaded model with graceful shutdown to ensure messages are enqueud before being deleted
+
+No code is required on the app side, just add the config and ask DevOps to add Scout to the box
+
+* Other tools
+
+Circuitry: Ruby tool for dealing with SNS/SQS, we mostly use it to send messages
+
+aws-go-sdk: Supports everything you could ever want at the price of being a pain to use
